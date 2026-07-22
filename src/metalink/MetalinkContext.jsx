@@ -165,6 +165,8 @@ export function MetalinkProvider({ children }) {
       headline: sanitizeShortText(ad.headline || ''),
       description: sanitizeText(ad.description || '', 500),
       creative_brief: sanitizeText(ad.creativeBrief || '', 1000),
+      image_url: sanitizeUrl(ad.imageUrl || '') || null,
+      image_prompt: sanitizeText(ad.imagePrompt || '', 2000),
     }))
     await supabase.from('metalink_generated_ads').insert(rows)
   }

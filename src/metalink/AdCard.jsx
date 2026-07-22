@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import { AD_ANGLES } from './adAngles.js'
 
+async function downloadImage(url, filename) {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objUrl
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(objUrl)
+  } catch {
+    // Fallback: open in a new tab so the user can save manually.
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
 const C = {
   surface: '#FFFFFF',
   surface2: '#FAF7F1',
@@ -80,7 +96,99 @@ function FieldBlock({ label, value, bold }) {
   )
 }
 
-export default function AdCard({ ad, index }) {
+function CreativeBlock({ ad, index, color, onRegenerate }) {
+  const [regenerating, setRegenerating] = useState(false)
+  const [error, setError] = useState('')
+
+  const hasImage = !!ad.imageUrl
+  const showBlock = hasImage || ad.imageError || onRegenerate
+
+  if (!showBlock) return null
+
+  async function regen() {
+    if (!onRegenerate || regenerating) return
+    setRegenerating(true)
+    setError('')
+    try {
+      await onRegenerate(index)
+    } catch (e) {
+      setError(e?.message || 'Could not generate image.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  return (
+    <div style={{
+      border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden',
+      background: C.surface2,
+    }}>
+      <div style={{ position: 'relative', aspectRatio: '1 / 1', background: '#EDE8E0' }}>
+        {hasImage && (
+          <img
+            src={ad.imageUrl}
+            alt={`Creative for ${ad.angle}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        )}
+        {!hasImage && (
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, textAlign: 'center',
+            fontSize: 12, fontFamily: "'DM Sans', sans-serif", color: C.textDim, lineHeight: 1.5,
+          }}>
+            {regenerating
+              ? 'Generating creative...'
+              : (ad.imageError || 'No creative yet.')}
+          </div>
+        )}
+        {regenerating && hasImage && (
+          <div style={{
+            position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontFamily: "'DM Sans', sans-serif", color: C.text, fontWeight: 600,
+          }}>Regenerating...</div>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, padding: '8px 10px', alignItems: 'center' }}>
+        <span style={{
+          fontSize: 10, fontFamily: "'Archivo', sans-serif", fontWeight: 800,
+          letterSpacing: '0.08em', color: C.textDim, textTransform: 'uppercase',
+        }}>Creative</span>
+        <div style={{ flex: 1 }} />
+        {hasImage && (
+          <button
+            onClick={() => downloadImage(ad.imageUrl, `metalink-ad-${index + 1}.png`)}
+            style={{
+              padding: '4px 11px', borderRadius: 6, border: `1px solid ${C.border}`,
+              background: 'transparent', color: C.textDim, fontSize: 11,
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer',
+            }}
+          >Download</button>
+        )}
+        {onRegenerate && (
+          <button
+            onClick={regen}
+            disabled={regenerating}
+            style={{
+              padding: '4px 11px', borderRadius: 6, border: `1px solid ${color}44`,
+              background: `${color}12`, color, fontSize: 11,
+              fontFamily: "'DM Sans', sans-serif", fontWeight: 600,
+              cursor: regenerating ? 'not-allowed' : 'pointer', opacity: regenerating ? 0.6 : 1,
+            }}
+          >{hasImage ? 'Regenerate' : 'Generate'}</button>
+        )}
+      </div>
+      {error && (
+        <div style={{ padding: '0 10px 8px', fontSize: 11, color: '#B9342F', fontFamily: "'DM Sans', sans-serif" }}>
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function AdCard({ ad, index, onRegenerate }) {
   const [expanded, setExpanded] = useState(false)
 
   const angleData = AD_ANGLES.find(a => a.name === ad.angle) || AD_ANGLES[index] || AD_ANGLES[0]
@@ -143,6 +251,9 @@ export default function AdCard({ ad, index }) {
 
       {/* Body */}
       <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        {/* Generated creative */}
+        <CreativeBlock ad={ad} index={index} color={color} onRegenerate={onRegenerate} />
+
         {/* Primary text */}
         <div style={{
           padding: '13px 14px',

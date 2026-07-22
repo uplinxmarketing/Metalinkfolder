@@ -4,7 +4,8 @@ import MetalinkDashboard from './MetalinkDashboard'
 import ChatPanel from './ChatPanel'
 import MegaAngleSelector from './MegaAngleSelector.jsx'
 import AdCard from './AdCard.jsx'
-import { generateAds, exportToCSV } from './adAgent.js'
+import { exportToCSV } from './adAgent.js'
+import { generateCampaign, regenerateCreative } from './campaignAgent.js'
 import { mineAngles } from './angleMiner.js'
 
 const C = {
@@ -177,7 +178,7 @@ function GeneratingStep({ stage }) {
   )
 }
 
-function ResultsStep({ client, ads, onReset }) {
+function ResultsStep({ client, ads, onReset, onRegenerate }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
@@ -204,7 +205,7 @@ function ResultsStep({ client, ads, onReset }) {
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(460px, 1fr))', gap: 16 }}>
-        {ads.map((ad, i) => <AdCard key={i} ad={ad} index={i} />)}
+        {ads.map((ad, i) => <AdCard key={i} ad={ad} index={i} onRegenerate={onRegenerate} />)}
       </div>
     </div>
   )
@@ -232,7 +233,7 @@ function MetalinkShell() {
     setGenStage('Writing your ads...')
     setScreen('generating')
     try {
-      const result = await generateAds({ source: activeClient.chat_summary, angles, onProgress: setGenStage })
+      const result = await generateCampaign({ source: activeClient.chat_summary, angles, onProgress: setGenStage })
       setAds(result)
       saveGeneratedAds(activeClient.id, result).catch(() => {})
       setScreen('results')
@@ -242,8 +243,8 @@ function MetalinkShell() {
     }
   }
 
-  // Jasper-style one-click path: mine angles, auto-pick the top 8, and write
-  // the ads with no manual chat or angle-selection step in between.
+  // Jasper-style one-click campaign: mine angles, auto-pick the top 8, write the
+  // ads, then run the art-director + image agents — copy and creatives in one go.
   async function handleQuickGenerate(client) {
     setError('')
     selectClient(client)
@@ -252,7 +253,7 @@ function MetalinkShell() {
       setGenStage('Mining unique angles for this client...')
       const mined = await mineAngles(client.chat_summary)
       const top = mined.slice(0, 8)
-      const result = await generateAds({ source: client.chat_summary, angles: top, onProgress: setGenStage })
+      const result = await generateCampaign({ source: client.chat_summary, angles: top, onProgress: setGenStage })
       setAds(result)
       saveGeneratedAds(client.id, result).catch(() => {})
       setScreen('results')
@@ -260,6 +261,14 @@ function MetalinkShell() {
       setError(e.message || 'Quick generate failed.')
       setScreen('dashboard')
     }
+  }
+
+  // Re-render a single ad's creative and update it in place.
+  async function handleRegenerateCreative(index) {
+    const ad = ads[index]
+    if (!ad) return
+    const url = await regenerateCreative(ad, activeClient?.chat_summary)
+    setAds(prev => prev.map((a, i) => i === index ? { ...a, imageUrl: url, imageError: '' } : a))
   }
 
   return (
@@ -303,7 +312,7 @@ function MetalinkShell() {
         )}
         {screen === 'generating' && <GeneratingStep stage={genStage} />}
         {screen === 'results' && (
-          <ResultsStep client={activeClient} ads={ads} onReset={handleHome} />
+          <ResultsStep client={activeClient} ads={ads} onReset={handleHome} onRegenerate={handleRegenerateCreative} />
         )}
       </div>
     </div>
