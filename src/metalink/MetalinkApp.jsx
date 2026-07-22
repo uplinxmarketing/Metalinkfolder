@@ -4,6 +4,7 @@ import MetalinkDashboard from './MetalinkDashboard'
 import ChatPanel from './ChatPanel'
 import MegaAngleSelector from './MegaAngleSelector.jsx'
 import AdCard from './AdCard.jsx'
+import AssistantChat from './AssistantChat.jsx'
 import { exportToCSV } from './adAgent.js'
 import { generateCampaign, regenerateCreative } from './campaignAgent.js'
 import { mineAngles } from './angleMiner.js'
@@ -131,7 +132,20 @@ function MetalinkGate({ children }) {
   )
 }
 
-function TopBar({ onHome }) {
+function NavTab({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+      background: active ? C.accent : 'transparent',
+      border: `1px solid ${active ? C.accent : C.border}`,
+      color: active ? C.textInverse : C.textMuted,
+      fontSize: 12.5, fontWeight: 700, fontFamily: "'Archivo', sans-serif",
+      transition: `all ${MOTION.fast}`,
+    }}>{children}</button>
+  )
+}
+
+function TopBar({ onHome, screen, onAssistant, onClients }) {
   return (
     <div style={{
       position: 'sticky', top: 0, zIndex: 50,
@@ -154,10 +168,10 @@ function TopBar({ onHome }) {
           letterSpacing: '-0.02em', color: C.text,
         }}>METALINK</span>
       </button>
-      <a href="/" style={{
-        fontSize: 12, color: C.textDim, fontFamily: "'DM Sans', sans-serif",
-        textDecoration: 'none', padding: '6px 10px', borderRadius: 6,
-      }}>← Home</a>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <NavTab active={screen === 'assistant'} onClick={onAssistant}>Assistant</NavTab>
+        <NavTab active={screen !== 'assistant'} onClick={onClients}>Clients</NavTab>
+      </div>
     </div>
   )
 }
@@ -213,7 +227,8 @@ function ResultsStep({ client, ads, onReset, onRegenerate }) {
 
 function MetalinkShell() {
   const { activeClient, selectClient, saveGeneratedAds } = useMetalink()
-  const [screen, setScreen] = useState('dashboard')
+  // Land on the assistant chat right after login; the client dashboard is a tab away.
+  const [screen, setScreen] = useState('assistant')
   const [ads, setAds] = useState([])
   const [error, setError] = useState('')
   const [genStage, setGenStage] = useState('')
@@ -225,7 +240,16 @@ function MetalinkShell() {
 
   function handleHome() {
     selectClient(null)
+    setScreen('assistant')
+  }
+
+  function handleClients() {
+    selectClient(null)
     setScreen('dashboard')
+  }
+
+  function handleAssistant() {
+    setScreen('assistant')
   }
 
   async function handleGenerate(angles) {
@@ -271,9 +295,18 @@ function MetalinkShell() {
     setAds(prev => prev.map((a, i) => i === index ? { ...a, imageUrl: url, imageError: '' } : a))
   }
 
+  if (screen === 'assistant') {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg }}>
+        <TopBar onHome={handleHome} screen={screen} onAssistant={handleAssistant} onClients={handleClients} />
+        <AssistantChat />
+      </div>
+    )
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
-      <TopBar onHome={handleHome} />
+      <TopBar onHome={handleHome} screen={screen} onAssistant={handleAssistant} onClients={handleClients} />
       <div style={{ maxWidth: 1160, margin: '0 auto', padding: '44px 40px 100px' }}>
         {screen === 'dashboard' && (
           <>
