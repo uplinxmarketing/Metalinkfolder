@@ -412,7 +412,7 @@ function QuestionScreen({ q, qNum, total, sectionMeta, direction, submitting, va
 }
 
 export default function MetalinkOnboarding({ clientId }) {
-  const { saveOnboardingResponse, saveClientOverview, fetchClientById } = useMetalink()
+  const { saveOnboardingResponse, saveOnboardingState, saveClientOverview, fetchClientById } = useMetalink()
 
   const [screen, setScreen] = useState('welcome')
   const [animKey, setAnimKey] = useState(0)
@@ -434,6 +434,29 @@ export default function MetalinkOnboarding({ clientId }) {
     fetchClientById(clientId).then(client => {
       if (!client) { setNotFound(true); return }
       setClientName(client.name || '')
+
+      // Already finished — nothing left to fill.
+      if (client.onboarding_complete) { setScreen('done'); return }
+
+      // Resume: rehydrate prior answers and jump to the first unfilled question.
+      const state = client.onboarding_state
+      const answers = state && typeof state.answers === 'object' ? state.answers : null
+      if (answers && Object.keys(answers).length > 0) {
+        answersRef.current = answers
+        const progress = Number(state.progress) || 0
+        if (progress >= QUESTIONS.length) {
+          // Everything answered but never finalized — land on the last summary
+          // so they can hit Finish.
+          setSummarySection(SECTIONS_ORDER[SECTIONS_ORDER.length - 1])
+          setScreen('section-summary')
+        } else {
+          const resumeIdx = Math.min(Math.max(0, progress), QUESTIONS.length - 1)
+          setDirection('forward')
+          setAnimKey(k => k + 1)
+          setQIdx(resumeIdx)
+          setScreen('question')
+        }
+      }
     })
   }, [clientId]) // eslint-disable-line
 
@@ -463,7 +486,11 @@ export default function MetalinkOnboarding({ clientId }) {
 
     const display = Array.isArray(raw) ? raw.join(', ') : raw
     answersRef.current[q.id] = raw
-    if (clientId) saveOnboardingResponse(clientId, q.label, display).catch(console.error)
+    if (clientId) {
+      saveOnboardingResponse(clientId, q.label, display).catch(console.error)
+      // Persist full progress so reopening the link resumes at the next question.
+      saveOnboardingState(clientId, answersRef.current, qIdx + 1).catch(console.error)
+    }
 
     if (isLastInSection) {
       const sec = currentSection

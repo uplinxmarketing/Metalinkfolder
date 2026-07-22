@@ -89,6 +89,20 @@ export function MetalinkProvider({ children }) {
     })
   }
 
+  // Persist onboarding progress after every answer so reopening the link
+  // resumes at the first unfilled question instead of starting over. Stores the
+  // raw answers (including uploaded-file metadata) plus a progress pointer.
+  async function saveOnboardingState(clientId, answers, progress) {
+    if (!clientId || typeof clientId !== 'string') return
+    await supabase
+      .from('metalink_clients')
+      .update({
+        onboarding_state: { answers: answers || {}, progress: progress || 0 },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', clientId)
+  }
+
   async function saveClientOverview(clientId, overview, fullData) {
     if (!clientId || typeof clientId !== 'string') return
     const cleanOverview = sanitizeText(overview, 5000)
@@ -218,7 +232,7 @@ export function MetalinkProvider({ children }) {
     <MetalinkContext.Provider value={{
       clients, activeClient,
       fetchClients, fetchClientById, selectClient, deleteClient, createNewClient,
-      saveOnboardingResponse, saveClientOverview,
+      saveOnboardingResponse, saveOnboardingState, saveClientOverview,
       fetchChatMessages, saveChatMessage, saveChatSummary,
       saveGeneratedAds, fetchGeneratedAds,
       fetchAdPerformance, saveAdPerformance, deleteAdPerformance,
